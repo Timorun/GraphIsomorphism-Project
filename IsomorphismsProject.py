@@ -235,7 +235,9 @@ def colorRefinement(uniongraph):
     dotnumber = 0
     # Variable to check if we have recolored any vertices, meaning we are not done with colorrefinement(havent reached a stable partition)
     prevhighestcolornum = -1
-    while highestcolornum != prevhighestcolornum:
+    #As soon as we have unbalanced then we stop coloring
+    balanced = True
+    while highestcolornum != prevhighestcolornum and balanced:
         dotnumber += 1
         prevhighestcolornum = highestcolornum
 
@@ -273,6 +275,10 @@ def colorRefinement(uniongraph):
         # apply the new colormapping
         for vertex in loopmapping:
             vertex.colornum = loopmapping[vertex]
+
+        #Check if still balanced, if not then loop will stop as they wont be Iso
+        balanced = checkIfBalanced(uniongraph)
+
         # rebuild the color partition dict
         partition = {}
         for vertex in uniongraph.vertices:
@@ -282,6 +288,23 @@ def colorRefinement(uniongraph):
 
     # We now have a stable partition and return a graph with final coloring
     return uniongraph, partition
+
+
+# Method used in each colorrefinment iteration to check if still Balanced coloring. To avoid coloring more unnecessarily
+def checkIfBalanced(uniongraph):
+    vertcount = len(uniongraph.vertices)
+    colorcountdict1 = {}
+    colorcountdict2 = {}
+    #The first half is part of graph1 and the second half is part of graph2
+    for vertex in uniongraph:
+        if vertex.label < (vertcount/2):
+            colorcountdict1[vertex.colornum] = colorcountdict1.get(vertex.colornum, 0) + 1
+        if vertex.label >= (vertcount/2):
+            colorcountdict2[vertex.colornum] = colorcountdict2.get(vertex.colornum, 0) + 1
+
+    if colorcountdict1 == colorcountdict2:
+        return True
+    return False
 
 
 # Method to check if coloring is balanced(so possibly iso) and if discrete(actually iso). Returns 2 booleans
@@ -349,8 +372,8 @@ def folderrun(directory):
 # folderrun("SampleGraphSetBranching")
 
 # findIsomorphismCount("SampleGraphSetBranching/torus24.grl")
-# findIsomorphismCount("SampleGraphSetBranching/torus72.grl")
-findIsomorphismCount("SampleGraphSetBranching/torus144.grl")
+findIsomorphismCount("SampleGraphSetBranching/torus72.grl")
+# findIsomorphismCount("SampleGraphSetBranching/torus144.grl")
 # findIsomorphismCount("SampleGraphSetBranching/products72.grl")
 # findIsomorphismCount("SampleGraphSetBranching/trees11.grl")
 # findIsomorphismCount("SampleGraphSetBranching/trees36.grl")
