@@ -100,13 +100,15 @@ def findIsomorphismCount(filelocation):
             # no need to check because of transitivity
             continue
 
-        # Initial coloring is all 0. Later with branching will have set unique colors for certain pairs of vertices
-        initialcoloring = [0] * len(graphcomb[0].vertices * 2)
+        initialcoloring = preProcessGraph(graphcomb[0], graphcomb[1])
+        # If preprocessing returns empty list them the first colorrefinement gave a unbalanced coloring, so we stop since they cannot be isomorphic
+        if not initialcoloring:
+            continue
 
-        # Here we go into the main call of countIsomorphism(). Taking the 2 graphs and the initalcoloring of 0s as params
+        # Here we go into the main call of countIsomorphism(). Taking the 2 graphs and the initalcoloring as params
         count = countIsomorphism(graphcomb[0], graphcomb[1], initialcoloring)
 
-        # If isomorphic(count>0) then we adjust countdict accordingly and we can ignore graph2 further on
+        # After having done branching and counting, if graphs are isomorphic(count>0) then we adjust countdict accordingly, and we can ignore graph2 further on
         # code underneath is just to update coundict(needed for print like they want) and ignorelist(for transititvity)
         if count > 0:
             added = False
@@ -134,6 +136,84 @@ def findIsomorphismCount(filelocation):
     print('Execution time:', round(elapsed_time, 2), 'seconds')
 
 
+# Method to preprocess graphs and remove false twins
+# We return a coloring to use in countIsomorphism, or we return empty list if first coloring is already unbalanced
+def preProcessGraph(graph1, graph2):
+    #We do a first colorrefinment with colornum being degree of vertex
+    uniongraph, vertmap = graphunion([graph1, graph2])
+    for vertex in uniongraph:
+        vertex.colornum = vertex.degree
+    uniongraph, partition = colorRefinement(uniongraph)
+
+    # If coloring unbalanced return empty list
+    coloringlist = []
+    if not checkIfBalanced(uniongraph):
+        return False
+
+    # We build coloringlist from colorrefined graph
+    for vertex in uniongraph.vertices:
+        coloringlist.append(vertex.colornum)
+
+    # list with vertices already seen, so to ignore
+    ignorelist = []
+
+    # And now we check for falsetwins and give them unique colors
+    # We iterate though all colors
+    for color in partition.keys():
+
+        if len(partition[color]) < 4:
+            # If less than 2 vertices per graph in color class then we no twins, so we continue
+            continue
+
+        # We make a variable to know available color to give first false twin in both graph1 and graph2.
+        # We make another variable because we color vert2 with a new color if they are a false twin to vert1. But we want to do the same with graph2 later, and give the same new colors
+        availablecolor = max(coloringlist)+1
+        colorfortwin = availablecolor
+
+        #First we check false twins in graph1
+        for vert1 in graph1.vertices:
+            vert1inunion = vertmap[vert1]
+            if vert1inunion.label not in ignorelist and vert1inunion in partition[color]:
+                # So we have now found a vertex from graph1 that has the color we want in the uniongraph and that is not in ignorelist
+                # we then will go through other vertices in graph1 in this same color to find false twins
+                ignorelist.append(vert1inunion.label)
+                vert1neighbours = set(vert1inunion.neighbours)
+
+                for vert2 in graph1.vertices:
+                    vert2inunion = vertmap[vert2]
+                    if vert2inunion.label not in ignorelist and vert2inunion in partition[color]:
+                        vert2neighbours = set(vert2inunion.neighbours)
+                        if vert1neighbours == vert2neighbours:
+                            #Then they are false twins
+                            coloringlist[vert2inunion.label] = colorfortwin
+                            colorfortwin += 1
+                            ignorelist.append(vert2inunion.label)
+            # we have checked for all vertices in graph1 if they are false twins of vert1 of graph1
+
+        # We have now checked all false twins in graph1 for this color, and we do the same for graph2
+        colorfortwin = availablecolor
+        for vert1 in graph2.vertices:
+            vert1inunion = vertmap[vert1]
+            if vert1inunion.label not in ignorelist and vert1inunion in partition[color]:
+                # So we have now found a vertex from graph1 that has the color we want in the uniongraph and that is not in ignorelist
+                # we then will go through other vertices in graph1 in this same color to find false twins
+                ignorelist.append(vert1inunion.label)
+                vert1neighbours = set(vert1inunion.neighbours)
+
+                for vert2 in graph2.vertices:
+                    vert2inunion = vertmap[vert2]
+                    if vert2inunion.label not in ignorelist and vert2inunion in partition[color]:
+                        if vert1neighbours == set(vert2inunion.neighbours):
+                            # Then they are false twins
+                            coloringlist[vert2inunion.label] = colorfortwin
+                            colorfortwin += 1
+                            ignorelist.append(vert2inunion.label)
+
+        return coloringlist
+
+
+
+
 def countIsomorphism(graph1, graph2, branchcoloring):
     # available unique color depends on the depth of branch, unique colors to assign are -1,-2,...,
     # can find branchdepth with amount of branchcolorings given.
@@ -141,9 +221,12 @@ def countIsomorphism(graph1, graph2, branchcoloring):
     availablecolor = int((branchdepth + 1) * -1)
     # At depth0 we assign -1, at depth 1(so first branching) we assign -2 etc...
 
+    #We give negative numbers for branching, so the available number is the min in branchcoloring-1
+    availablecolor = min(branchcoloring)-1
+
     # We get the uniongraph and vertmap, for the union of the 2 graphs. (I think we could put this outside of countIsomorphism actually not sure.)
     uniongraph, vertmap = graphunion([graph1, graph2])
-    # Color the uniongraph according to branchcoloring list which has a color for each vert in the uniongraph. Initially all 0s
+    # Color the uniongraph according to branchcoloring list which has a color for each vert in the uniongraph.
     for vertex in uniongraph:
         vertex.colornum = branchcoloring[vertex.label]
 
@@ -214,6 +297,8 @@ def colorRefinement(uniongraph):
     partition = {}
 
     highestcolornum = 0
+    for vertex in uniongraph:
+        highestcolornum = max(vertex.colornum, highestcolornum)
     # # initial coloring all with their degree
     # for vertex in uniongraph.vertices:
     #     degree = len(vertex.neighbours)
@@ -225,7 +310,6 @@ def colorRefinement(uniongraph):
     
     # !!! Modified for branching, we color the uniongraph beforehand according to branching
     # build the color partition dict
-    partition = {}
     for vertex in uniongraph.vertices:
         if vertex.colornum not in partition.keys():
             partition[vertex.colornum] = []
@@ -372,11 +456,11 @@ def folderrun(directory):
 # folderrun("SampleGraphSetBranching")
 
 # findIsomorphismCount("SampleGraphSetBranching/torus24.grl")
-findIsomorphismCount("SampleGraphSetBranching/torus72.grl")
+# findIsomorphismCount("SampleGraphSetBranching/torus72.grl")
 # findIsomorphismCount("SampleGraphSetBranching/torus144.grl")
 # findIsomorphismCount("SampleGraphSetBranching/products72.grl")
-# findIsomorphismCount("SampleGraphSetBranching/trees11.grl")
-# findIsomorphismCount("SampleGraphSetBranching/trees36.grl")
+findIsomorphismCount("SampleGraphSetBranching/trees11.grl")
+findIsomorphismCount("SampleGraphSetBranching/trees36.grl")
 # findIsomorphismCount("SampleGraphSetBranching/modulesD.grl")
 # findIsomorphismCount("SampleGraphSetBranching/cubes3.grl")
 # findIsomorphismCount("SampleGraphSetBranching/cubes5.grl")
