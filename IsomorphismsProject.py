@@ -26,7 +26,7 @@ def findIsomorphismCount(filelocation, mode):
         for graph in filegraphs:
             countdict[filegraphs.index(graph)] = 0
     else:
-        # If mode 2 or 3 then we want the isomorphic graphs
+        # If mode 2 or 3 then we want the isomorphic graphs lists
         # If two graphs are Isomorphic you can ignore one of the two for the rest of the code. example [0,1] so we can ignore 1 for the rest of the code, transitivity rule
         ignorelist = []
 
@@ -75,16 +75,16 @@ def findIsomorphismCount(filelocation, mode):
         for isographs in countdict.keys():
             graph1 = filegraphs[isographs[0]]
             # Preprocessing of graphs
-            # initialcoloring = preProcessGraph(graphcomb[0], graphcomb[1])
-            initialcoloring = [0] * len(graph1.vertices * 2)
+            initialcoloring = preProcessGraph(graph1)
+            # initialcoloring = [0] * len(graph1.vertices * 2)
             count = countIsomorphism(graph1, graph1, initialcoloring, True)
             countdict[isographs] = count
-    elif mode == 1 :
+    elif mode == 1:
         for graphnb in countdict.keys():
             graph = filegraphs[graphnb]
             # Preprocessing of graphs
-            # initialcoloring = preProcessGraph(graphcomb[0], graphcomb[1])
-            initialcoloring = [0] * len(graph.vertices * 2)
+            initialcoloring = preProcessGraph(graph)
+            # initialcoloring = [0] * len(graph.vertices * 2)
             count = countIsomorphism(graph, graph, initialcoloring, True)
             countdict[graphnb] = count
     else:
@@ -99,92 +99,123 @@ def findIsomorphismCount(filelocation, mode):
     print('Execution time:', round(elapsed_time, 2), 'seconds')
 
 
-# Method to preprocess graphs and remove false twins
-# We return a coloring to use in countIsomorphism, or we return empty list if first coloring is already unbalanced
-def preProcessGraph(graph1, graph2):
-    # We do a first colorrefinment with colornum being degree of vertex
-    uniongraph, vertmap = graphunion([graph1, graph2])
+# Method to preprocess graphs and remove false twins.
+# We return a coloring of union of graph to itself to use in countIsomorphism.
+def preProcessGraph(graph1):
+    # We do a first colorrefinment with colornum=degree of vertex
+    uniongraph, vertmap = graphunion([graph1, graph1])
     for vertex in uniongraph:
         vertex.colornum = vertex.degree
     uniongraph, partition = colorRefinement(uniongraph)
 
-    # If coloring unbalanced return empty list
-    coloringlist = []
-    if not checkIfBalanced(uniongraph):
-        return False
+    # In this dict we will put vertices as keys, and their list of twins as key
+    twindict = {}
 
-    # We build coloringlist from colorrefined graph
-    for vertex in uniongraph.vertices:
+    coloringlist = []
+    # We build coloringlist from colorrefined uniongraph.
+    # half since we only need to check false twins once, and we adapt coloring list of the first part of the union. Later we just double the list to get our full coloringlist for countIso
+    for vertex in uniongraph.vertices[:len(uniongraph.vertices)//2]:
         coloringlist.append(vertex.colornum)
 
-    # list with vertices already seen, so to ignore
-    ignorelist = []
+    availablecolor = max(coloringlist) + 1
 
-    # And now we check for falsetwins and give them unique colors
+    # dict with falsetwins boolean for each vertices
+
+    # for vertex in graph1:
+
+
+    # We no now check for falsetwins and give them unique colors
     # We iterate though all colors
     for color in partition.keys():
 
         if len(partition[color]) < 4:
-            # If less than 2 vertices per graph in color class then we no twins, so we continue
+            # If less than 2 vertices per graph in color class then there's no twins, so we continue
             continue
 
-        # We make a variable to know available color to give first false twin in both graph1 and graph2.
-        # We make another variable because we color vert2 with a new color if they are a false twin to vert1. But we want to do the same with graph2 later, and give the same new colors
-        availablecolor = max(coloringlist) + 1
-        colorfortwin = availablecolor
 
-        # First we check false twins in graph1
-        for vert1 in graph1.vertices:
-            vert1inunion = vertmap[vert1]
-            if vert1inunion.label not in ignorelist and vert1inunion in partition[color]:
-                # So we have now found a vertex from graph1 that has the color we want in the uniongraph and that is not in ignorelist
-                # we then will go through other vertices in graph1 in this same color to find false twins
-                ignorelist.append(vert1inunion.label)
-                vert1neighbours = set(vert1inunion.neighbours)
+        # list with vertices already seen, so to ignore
+        ignorelist = []
+        # We go through each color class and check for false twins in the first half of the union graph(we could also choose the 2nd half since same graphs)
+        vertices = partition[color][:len(partition[color])//2]
+        for vert1 in vertices:
+            if vert1.label not in ignorelist:
+                ignorelist.append(vert1.label)
+                vert1neighbours = set(vert1.neighbours)
 
-                for vert2 in graph1.vertices:
-                    vert2inunion = vertmap[vert2]
-                    if vert2inunion.label not in ignorelist and vert2inunion in partition[color]:
-                        vert2neighbours = set(vert2inunion.neighbours)
-                        vert1neighbourswithanditself = vert1inunion.neighbours.append(vert1inunion)
-                        vert2neighbourswithanditself = vert2inunion.neighbours.append(vert2inunion)
+                for vert2 in vertices:
+                    if vert2.label not in ignorelist:
+                        vert2neighbours = set(vert2.neighbours)
+                        vert1neighbourswithanditself = vert1.neighbours.append(vert1)
+                        vert2neighbourswithanditself = vert2.neighbours.append(vert2)
 
                         if vert1neighbours == vert2neighbours:
+                        # if vert1neighbourswithanditself == vert2neighbourswithanditself:
+                            print("False twins detected")
                             # Then they are false twins
-                            coloringlist[vert2inunion.label] = colorfortwin
-                            colorfortwin += 1
-                            ignorelist.append(vert2inunion.label)
-
-                        # # Now if they're real twins then we can add vert2inunion to ignore list
+                            coloringlist[vert1.label] = availablecolor
+                            coloringlist[vert2.label] = availablecolor+1
+                            availablecolor += 2
+                            ignorelist.append(vert2.label)
+                        # Now if they're real twins then we can add vert2inunion to ignore list
                         # elif vert1neighbourswithanditself == vert2neighbourswithanditself:
-                        #     ignorelist.append(vert2inunion.label)
-            # we have checked for all vertices in graph1 if they are false twins of vert1 of graph1
+                        #     ignorelist.append(vert2.label)
 
-        # We have now checked all false twins in graph1 for this color, and we do the same for graph2
-        colorfortwin = availablecolor
-        for vert1 in graph2.vertices:
-            vert1inunion = vertmap[vert1]
-            if vert1inunion.label not in ignorelist and vert1inunion in partition[color]:
-                ignorelist.append(vert1inunion.label)
-                vert1neighbours = set(vert1inunion.neighbours)
+    # Now we have coloring for graph with false twins handled, so we just double the list to get full coloringlist for countIso
+    coloringlist = coloringlist+coloringlist
 
-                for vert2 in graph2.vertices:
-                    vert2inunion = vertmap[vert2]
-                    if vert2inunion.label not in ignorelist and vert2inunion in partition[color]:
-                        vert2neighbours = set(vert2inunion.neighbours)
-                        vert1neighbourswithanditself = vert1inunion.neighbours.append(vert1inunion)
-                        vert2neighbourswithanditself = vert2inunion.neighbours.append(vert2inunion)
+        # # First we check false twins in graph1
+        # for vert1 in graph1.vertices:
+        #     vert1inunion = vertmap[vert1]
+        #     if vert1inunion.label not in ignorelist and vert1inunion in partition[color]:
+        #         # So we have now found a vertex from graph1 that has the color we want in the uniongraph and that is not in ignorelist
+        #         # we then will go through other vertices in graph1 in this same color to find false twins
+        #         ignorelist.append(vert1inunion.label)
+        #         vert1neighbours = set(vert1inunion.neighbours)
+        #
+        #         for vert2 in graph1.vertices:
+        #             vert2inunion = vertmap[vert2]
+        #             if vert2inunion.label not in ignorelist and vert2inunion in partition[color]:
+        #                 vert2neighbours = set(vert2inunion.neighbours)
+        #                 vert1neighbourswithanditself = vert1inunion.neighbours.append(vert1inunion)
+        #                 vert2neighbourswithanditself = vert2inunion.neighbours.append(vert2inunion)
+        #
+        #                 if vert1neighbours == vert2neighbours:
+        #                     # Then they are false twins
+        #                     coloringlist[vert2inunion.label] = colorfortwin
+        #                     colorfortwin += 1
+        #                     ignorelist.append(vert2inunion.label)
+        #
+        #                 # # Now if they're real twins then we can add vert2inunion to ignore list
+        #                 # elif vert1neighbourswithanditself == vert2neighbourswithanditself:
+        #                 #     ignorelist.append(vert2inunion.label)
+        #     # we have checked for all vertices in graph1 if they are false twins of vert1 of graph1
 
-                        if vert1neighbours == vert2neighbours:
-                            # Then they are false twins
-                            coloringlist[vert2inunion.label] = colorfortwin
-                            colorfortwin += 1
-                            ignorelist.append(vert2inunion.label)
-
-                        # # Now if they're real twins then we can add vert2inunion to ignore list
-                        # elif vert1neighbourswithanditself == vert2neighbourswithanditself:
-                        #     ignorelist.append(vert2inunion.label)
-        return coloringlist
+        # # We have now checked all false twins in graph1 for this color, and we do the same for graph2
+        # colorfortwin = availablecolor
+        # for vert1 in graph2.vertices:
+        #     vert1inunion = vertmap[vert1]
+        #     if vert1inunion.label not in ignorelist and vert1inunion in partition[color]:
+        #         ignorelist.append(vert1inunion.label)
+        #         vert1neighbours = set(vert1inunion.neighbours)
+        #
+        #         for vert2 in graph2.vertices:
+        #             vert2inunion = vertmap[vert2]
+        #             if vert2inunion.label not in ignorelist and vert2inunion in partition[color]:
+        #                 vert2neighbours = set(vert2inunion.neighbours)
+        #                 vert1neighbourswithanditself = vert1inunion.neighbours.append(vert1inunion)
+        #                 vert2neighbourswithanditself = vert2inunion.neighbours.append(vert2inunion)
+        #
+        #                 if vert1neighbours == vert2neighbours:
+        #                     # Then they are false twins
+        #                     coloringlist[vert2inunion.label] = colorfortwin
+        #                     colorfortwin += 1
+        #                     ignorelist.append(vert2inunion.label)
+        #
+        #                 # # Now if they're real twins then we can add vert2inunion to ignore list
+        #                 # elif vert1neighbourswithanditself == vert2neighbourswithanditself:
+        #                 #     ignorelist.append(vert2inunion.label)
+    print("PreProcess done")
+    return coloringlist
 
 
 def countIsomorphism(graph1, graph2, branchcoloring, automorphism):
@@ -301,7 +332,7 @@ def colorRefinement(uniongraph):
 
     # coloring iteration count
     dotnumber = 0
-    # Variable to check if we have recolored any vertices, meaning we are not done with colorrefinement(havent reached a stable partition)
+    # Variable to check if we have recolored any vertices, meaning we are not done with colorrefinement(haven't reached a stable partition)
     prevhighestcolornum = -1
     # As soon as we have unbalanced then we stop coloring
     balanced = True
@@ -344,7 +375,7 @@ def colorRefinement(uniongraph):
         for vertex in loopmapping:
             vertex.colornum = loopmapping[vertex]
 
-        # Check if still balanced, if not then loop will stop as they wont be Iso
+        # Check if still balanced, if not then loop will stop as they will not be Iso
         balanced = checkIfBalanced(uniongraph)
 
         # rebuild the color partition dict
@@ -439,7 +470,7 @@ def folderrun(directory):
     for filename in os.listdir(directory):
         filelocation = os.path.join(directory, filename)
         # findPossibleIso(filelocation)
-        findIsomorphismCount(filelocation)
+        findIsomorphismCount(filelocation, 2)
     # get the execution time
     elapsedtotaltime = time.time() - totalstarttime
     print('Total execution time:', round(elapsedtotaltime, 2), 'seconds')
@@ -451,11 +482,11 @@ def folderrun(directory):
 # findIsomorphismCount("SampleGraphSetBranching/torus72.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/torus144.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/products72.grl", 2)
-# findIsomorphismCount("SampleGraphSetBranching/trees11.grl", 2)
+findIsomorphismCount("SampleGraphSetBranching/trees11.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/trees36.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/trees90.grl", 2)
-findIsomorphismCount("SampleGraphSetBranching/modulesC.grl", 2)
-findIsomorphismCount("SampleGraphSetBranching/modulesD.grl", 2)
+# findIsomorphismCount("SampleGraphSetBranching/modulesC.grl", 2)
+# findIsomorphismCount("SampleGraphSetBranching/modulesD.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/cubes3.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/cubes5.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/cubes6.grl", 2)
@@ -465,12 +496,12 @@ findIsomorphismCount("SampleGraphSetBranching/modulesD.grl", 2)
 
 
 # folderrun("test")
-totalstarttime = time.time()
+totalst = time.time()
 # findIsomorphismCount("test/BasicGI1.grl", 3)
 # findIsomorphismCount("test/BasicGI2.grl", 3)
 # findIsomorphismCount("test/BasicGI3.grl", 3)
 # findIsomorphismCount("test/BasicGIAut1.grl", 2)
 # findIsomorphismCount("test/BasicAut1.gr", 1)
 # findIsomorphismCount("test/BasicAut2.gr", 1)
-elapsedtotaltime = time.time() - totalstarttime
-print('Total execution time:', round(elapsedtotaltime, 2), 'seconds')
+totaltime = time.time() - totalst
+print('Total execution time:', round(totaltime, 2), 'seconds')
