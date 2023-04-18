@@ -1,5 +1,5 @@
 import os
-# from line_profiler_pycharm import profile
+from line_profiler_pycharm import profile
 from graph import *
 from graph_io import *
 import itertools
@@ -9,6 +9,7 @@ import time
 # sys.setrecursionlimit(2000)
 
 # Main function to find  Isomorphic graphs and their isomorphism count
+@profile
 def findIsomorphismCount(filelocation, mode):
     # The function has 3 modes: 1 to just find AUT#, 2 to find both, 3 to just find Iso
 
@@ -48,11 +49,12 @@ def findIsomorphismCount(filelocation, mode):
 
             initialcoloring = [0] * len(graphcomb[0].vertices * 2)
             # Here we go into the main call of countIsomorphism(). Taking the 2 graphs and the initalcoloring as params. And indicating we simply want to know if an Isoexists
-            count = countIsomorphism(graphcomb[0], graphcomb[1], initialcoloring, False)
+            uniongraph, vertmap = graphunion([graphcomb[0], graphcomb[1]])
+            count = countIsomorphism(uniongraph, initialcoloring, False)
 
             # After having done branching and counting, if graphs are isomorphic(count>0) then we adjust countdict accordingly, and we can ignore graph2 further on
             # code underneath is just to update coundict(needed for print like they want) and ignorelist(for transititvity)
-            if count > 0:
+            if count == 1:
                 added = False
                 # First check if graph1 is already in one of the countdict lists, If yes then we append graph2 to that list
                 for isographs in list(countdict.keys()):
@@ -77,15 +79,17 @@ def findIsomorphismCount(filelocation, mode):
             # Preprocessing of graphs
             # initialcoloring = preProcessGraph(graphcomb[0], graphcomb[1])
             initialcoloring = [0] * len(graph1.vertices * 2)
-            count = countIsomorphism(graph1, graph1, initialcoloring, True)
+            uniongraph, vertmap = graphunion([graph1, graph1])
+            count = countIsomorphism(uniongraph, initialcoloring, True)
             countdict[isographs] = count
-    elif mode == 1 :
+    elif mode == 1:
         for graphnb in countdict.keys():
             graph = filegraphs[graphnb]
             # Preprocessing of graphs
             # initialcoloring = preProcessGraph(graphcomb[0], graphcomb[1])
             initialcoloring = [0] * len(graph.vertices * 2)
-            count = countIsomorphism(graph, graph, initialcoloring, True)
+            uniongraph, vertmap = graphunion([graph, graph])
+            count = countIsomorphism(uniongraph, initialcoloring, True)
             countdict[graphnb] = count
     else:
         for isographs in countdict.keys():
@@ -187,7 +191,8 @@ def preProcessGraph(graph1, graph2):
         return coloringlist
 
 
-def countIsomorphism(graph1, graph2, branchcoloring, automorphism):
+@profile
+def countIsomorphism(union, branchcoloring, automorphism):
     # This function can count the number of isomorphisms(used to find AUT#), but also used to simply check if an isomorphism exists depending on automorphism boolean
 
     # available unique color depends on the depth of branch, unique colors to assign are -1,-2,...,
@@ -200,8 +205,9 @@ def countIsomorphism(graph1, graph2, branchcoloring, automorphism):
     availablecolor = min(branchcoloring) - 1
 
     # We get the uniongraph and vertmap, for the union of the 2 graphs. (I think we could put this outside of countIsomorphism actually not sure.)
-    uniongraph, vertmap = graphunion([graph1, graph2])
+    # uniongraph, vertmap = graphunion([graph1, graph2])
     # Color the uniongraph according to branchcoloring list which has a color for each vert in the uniongraph.
+    uniongraph = union
     for vertex in uniongraph:
         vertex.colornum = branchcoloring[vertex.label]
 
@@ -241,7 +247,7 @@ def countIsomorphism(graph1, graph2, branchcoloring, automorphism):
     #         branch1 = vertmap[vertex]
     #         break
 
-    # To work with graph on union of itself we avoid vertmap, first half of vertices is graph1
+    # To work with graph on union of itself we avoid vertmap, first half of vertices is graph1, and we pick a vertex with this color
     graphlen = len(uniongraph.vertices)
     for i in range(int(graphlen / 2)):
         if uniongraph.vertices[i].colornum == color:
@@ -265,7 +271,7 @@ def countIsomorphism(graph1, graph2, branchcoloring, automorphism):
             # Set unique color in branchcoloring list to the vertices chosen, and countIsomorphism on it
             branchcoloring[branch1.label] = availablecolor
             branchcoloring[branch2.label] = availablecolor
-            count = countIsomorphism(graph1, graph2, branchcoloring, automorphism)
+            count = countIsomorphism(uniongraph, branchcoloring, automorphism)
 
             # If we are not looking for AUT# then we can return as soon as we have found 1 isomorphism
             if not automorphism and count > 0:
@@ -454,8 +460,8 @@ def folderrun(directory):
 # findIsomorphismCount("SampleGraphSetBranching/trees11.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/trees36.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/trees90.grl", 2)
-findIsomorphismCount("SampleGraphSetBranching/modulesC.grl", 2)
-findIsomorphismCount("SampleGraphSetBranching/modulesD.grl", 2)
+# findIsomorphismCount("SampleGraphSetBranching/modulesC.grl", 2)
+# findIsomorphismCount("SampleGraphSetBranching/modulesD.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/cubes3.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/cubes5.grl", 2)
 # findIsomorphismCount("SampleGraphSetBranching/cubes6.grl", 2)
@@ -465,12 +471,22 @@ findIsomorphismCount("SampleGraphSetBranching/modulesD.grl", 2)
 
 
 # folderrun("test")
-totalstarttime = time.time()
+# totalstarttime = time.time()
 # findIsomorphismCount("test/BasicGI1.grl", 3)
 # findIsomorphismCount("test/BasicGI2.grl", 3)
 # findIsomorphismCount("test/BasicGI3.grl", 3)
 # findIsomorphismCount("test/BasicGIAut1.grl", 2)
 # findIsomorphismCount("test/BasicAut1.gr", 1)
 # findIsomorphismCount("test/BasicAut2.gr", 1)
+# elapsedtotaltime = time.time() - totalstarttime
+# print('Total execution time:', round(elapsedtotaltime, 2), 'seconds')
+
+totalstarttime = time.time()
+findIsomorphismCount("Basic2023/Basic1GI.grl", 3)
+findIsomorphismCount("Basic2023/Basic2GI.grl", 3)
+findIsomorphismCount("Basic2023/Basic3GI.grl", 3)
+findIsomorphismCount("Basic2023/Basic4Aut.gr", 1)
+findIsomorphismCount("Basic2023/Basic5Aut.grl", 1)
+findIsomorphismCount("Basic2023/Basic6GIAut.grl", 2)
 elapsedtotaltime = time.time() - totalstarttime
 print('Total execution time:', round(elapsedtotaltime, 2), 'seconds')
